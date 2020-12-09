@@ -24,21 +24,30 @@
 //**********************************
 //Constructor functions
 //**********************************
-MiniPID::MiniPID(double p, double i, double d){
+MiniPID::MiniPID()
+{
 	init();
-	P=p; I=i; D=d;
-}
+};
 
-MiniPID::MiniPID(){
+MiniPID::MiniPID(const double p, const double i, const double d)
+{
 	init();
-}
+	P=p; 
+	I=i; 
+	D=d;
+};
 
-MiniPID::MiniPID(double p, double i, double d, double f){
+MiniPID::MiniPID(const double p, const double i, const double d, const double f)
+{
 	init();
-	P=p; I=i; D=d; F=f;
-}
+	P=p; 
+	I=i; 
+	D=d; 
+	F=f;
+};
 
-void MiniPID::init(){
+void MiniPID::init()
+{
 	P=0.0;
 	I=0.0;
 	D=0.0;
@@ -71,63 +80,30 @@ void MiniPID::init(){
  *
  * @param p Proportional gain. Affects output according to <b>output+=P*(setpoint-current_value)</b>
  */
-void MiniPID::setP(double p){
-	P=p;
-	checkSigns();
-}
-
-/**
- * Changes the I parameter <br>
- * this->is used for overcoming disturbances, and ensuring that the controller always gets to the control mode.
- * Typically tuned second for "Position" based modes, and third for "Rate" or continuous based modes. <br>
- * Affects output through <b>output+=previous_errors*Igain ;previous_errors+=current_error</b>
- *
- * @see {@link #setMaxIOutput(double) setMaxIOutput} for how to restrict
- *
- * @param i New gain value for the Integral term
- */
-void MiniPID::setI(double i)
+void MiniPID::setParameters(const double p, const double i, const double d)
 {
-	 /* Implementation note:
-	 * this scales the accumulated error to avoid output errors.
-	 * As an example doubling the I term cuts the accumulated error in half, which results in the
-	 * output change due to the I term constant during the transition.
-	 * TvR: This is now implemented in the calculation loop
-	 */
-//	if(I!=0)
-//	{
-//		errorSum=errorSum*i/I;
-//	};
-//	if(maxIOutput!=0)
-//	{
-//		maxErrorSum = maxIOutput/i;
-//	}
+	P=p;
 	I=i;
-	checkSigns();
-}
-
-void MiniPID::setD(double d){
 	D=d;
+	F=0;
 	checkSigns();
-}
+};
 
-/**Configure the FeedForward parameter. <br>
- * this->is excellent for Velocity, rate, and other	continuous control modes where you can
- * expect a rough output value based solely on the setpoint.<br>
- * Should not be used in "position" based control modes.
- *
- * @param f Feed forward gain. Affects output according to <b>output+=F*Setpoint</b>;
- */
-void MiniPID::setF(double f){
+void MiniPID::setParameters(const double p, const double i, const double d, const double f)
+{
+	P=p;
+	I=i;
+	D=d;
 	F=f;
 	checkSigns();
-}
+};
 
 /**Set the maximum output value contributed by the I component of the system
  * this->can be used to prevent large windup issues and make tuning simpler
  * @param maximum. Units are the same as the expected output value
  */
-void MiniPID::setMaxIOutput(double maximum){
+void MiniPID::setMaxIOutput(const double maximum)
+{
 	/* Internally maxError and Izone are similar, but scaled for different purposes.
 	 * The maxError is generated for simplifying math, since calculations against
 	 * the max error are far more common than changing the I term or Izone.
@@ -139,30 +115,37 @@ void MiniPID::setMaxIOutput(double maximum){
  * set to (-maximum).
  * @param output
  */
-void MiniPID::setOutputLimits(double output){ setOutputLimits(-output,output);}
+void MiniPID::setOutputLimits(const double output)
+{ 
+	setOutputLimits(-output,output);
+};
 
 /**
  * Specify a maximum output.
  * @param minimum possible output value
  * @param maximum possible output value
  */
-void MiniPID::setOutputLimits(double minimum,double maximum){
-	if(maximum<minimum)return;
+void MiniPID::setOutputLimits(const double minimum, const double maximum)
+{
+	if(maximum<minimum)
+		return;
 	maxOutput=maximum;
 	minOutput=minimum;
 
 	// Ensure the bounds of the I term are within the bounds of the allowable output swing
-	if(maxIOutput==0 || maxIOutput>(maximum-minimum) ){
+	if(maxIOutput==0 || maxIOutput>(maximum-minimum) )
+	{
 		setMaxIOutput(maximum-minimum);
-	}
-}
+	};
+};
 
 /** Set the operating direction of the PID controller
  * @param reversed Set true to reverse PID output
  */
-void MiniPID::setDirection(bool reversed){
-	this->reversed=reversed;
-}
+void MiniPID::setReversed(bool reversed)
+{
+	this->reversed = reversed;
+};
 
 //**********************************
 //Primary operating functions
@@ -173,16 +156,16 @@ void MiniPID::setDirection(bool reversed){
  */
 void MiniPID::setSetpoint(double setpoint)
 {
-	this->setpoint=setpoint;
+	this->setpoint = setpoint;
 #ifdef MINIPID_SUPPRESS_DKICK
 	this->lastError += setpoint;
 #endif
-}
+};
 
 double MiniPID::getSetpoint()
 {
 	return setpoint;
-}
+};
 
 /** Calculate the PID value needed to hit the target setpoint.
 * Automatically re-calculates the output at each call.
@@ -190,7 +173,7 @@ double MiniPID::getSetpoint()
 * @param target The target value
 * @return calculated output value for driving the actual to the target
 */
-double MiniPID::getOutput(double actual)
+double MiniPID::getOutput(const double actual)
 {
 	double output;
 
@@ -231,7 +214,7 @@ double MiniPID::getOutput(double actual)
 	{
 		lastError = error;
 		errorSum = 0;
-		lastOutput = SHUTDOWN_SETPOINT; //Poutput+Foutput;
+		lastOutput = Poutput + Foutput;
 		firstRun = false;
 	};
 
@@ -267,20 +250,20 @@ double MiniPID::getOutput(double actual)
 	if(outputRampRate !=0 )
 	{
 		outputClampedByRamprate = clamp(&output, lastOutput-outputRampRate, lastOutput+outputRampRate);
-	}
+	};
 
 	// Limit the output by min/maxOutput
 	outputClampedByMinMax = false;
 	if(minOutput != maxOutput)
 	{
 		outputClampedByMinMax = clamp(&output, minOutput, maxOutput);
-	}
+	};
 
 	// Filter the Output
 	if(outputFilter!=0)
 	{
 		output=lastOutput*outputFilter+output*(1-outputFilter);
-	}
+	};
 
 	// Gather statusdata
 	_last.input = actual;
@@ -299,26 +282,28 @@ double MiniPID::getOutput(double actual)
  * Calculates the PID value using the last provided setpoint and actual valuess
  * @return calculated output value for driving the actual to the target
  */
-double MiniPID::getOutput(double actual, double setpoint)
+double MiniPID::getOutput(const double actual, const double setpoint)
 {
 	setSetpoint(setpoint);
 	return getOutput(actual);
-}
+};
 
 /**
- * Resets the controller. this->erases the I term buildup, and removes D gain on the next loop.
+ * Resets the controller. this erases the I term buildup, and removes D gain on the next loop.
  */
-void MiniPID::reset(){
+void MiniPID::reset()
+{
 	firstRun=true;
 	errorSum=0;
-}
+};
 
 /**Set the maximum rate the output can increase per cycle.
  * @param rate
  */
-void MiniPID::setOutputRampRate(double rate){
-	outputRampRate=rate;
-}
+void MiniPID::setOutputRampRate(double rate)
+{
+	outputRampRate = rate;
+};
 
 /** Set a limit on how far the setpoint can be from the current position
  * <br>Can simplify tuning by helping tuning over a small range applies to a much larger range.
@@ -326,9 +311,10 @@ void MiniPID::setOutputRampRate(double rate){
  * during large setpoint adjustments. Increases lag and I term if range is too small.
  * @param range
  */
-void MiniPID::setSetpointRange(double range){
-	setpointRange=range;
-}
+void MiniPID::setSetpointRange(double range)
+{
+	setpointRange = range;
+};
 
 /**Set a filter on the output to reduce sharp oscillations. <br>
  * 0.1 is likely a sane starting value. Larger values P and D oscillations, but force larger I values.
@@ -340,8 +326,8 @@ void MiniPID::setOutputFilter(double strength)
 {
 	if(strength < 0 || strength >= 1)
 		return;
-	outputFilter=strength;
-}
+	outputFilter = strength;
+};
 
 //**************************************
 // Helper functions
@@ -360,14 +346,14 @@ int MiniPID::clamp(double* value, double min, double max)
 	{
 		*value = max;
 		return 1;
-	}
+	};
 	if(*value < min)
 	{
 		*value = min;
 		return -1;
-	}
+	};
 	return 0;
-}
+};
 
 /**
  * Test if the value is within the min and max, inclusive
@@ -376,26 +362,28 @@ int MiniPID::clamp(double* value, double min, double max)
  * @param max Maximum value of range
  * @return
  */
-bool MiniPID::between(double value, double min, double max){
+bool MiniPID::isbetween(double value, double min, double max)
+{
 		return (min<value) && (value<max);
-}
+};
 
 /**
  * To operate correctly, all PID parameters require the same sign,
  * with that sign depending on the {@literal}reversed value
  */
-void MiniPID::checkSigns(){
-	if(reversed){	//all values should be below zero
+void MiniPID::checkSigns()
+{
+	if(reversed)
+	{	//all values should be below zero
 		if(P>0) P*=-1;
 		if(I>0) I*=-1;
 		if(D>0) D*=-1;
 		if(F>0) F*=-1;
-	}
-	else{	//all values should be above zero
+	}else{	//all values should be above zero
 		if(P<0) P*=-1;
 		if(I<0) I*=-1;
 		if(D<0) D*=-1;
 		if(F<0) F*=-1;
-	}
-}
+	};
+};
 

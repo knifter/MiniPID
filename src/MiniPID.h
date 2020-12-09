@@ -12,27 +12,24 @@
 class MiniPID{
 public:
 	MiniPID();
-	MiniPID(double, double, double);
-	MiniPID(double, double, double, double);
-	void setP(double);
-	void setI(double);
-	void setD(double);
-	void setF(double);
-	void setPID(double, double, double);
-	void setPID(double, double, double, double);
-	void setMaxIOutput(double);
-	void setOutputLimits(double);
-	void setOutputLimits(double,double);
+	MiniPID(const double, const double, const double);
+	MiniPID(const double, const double, const double, const double);
+	void setParameters(const double p, const double i, const double d);
+	void setParameters(const double p, const double i, const double d, const double f);
+
+	void setMaxIOutput(const double);
+	void setOutputLimits(const double);
+	void setOutputLimits(const double, const double);
 	void getOutputLimits(double*, double*);
-	void setDirection(bool);
-	void setSetpoint(double);
+	void setReversed(bool);
+	void setSetpoint(const double setpoint);
 	double getSetpoint();
 	void reset();
 	void setOutputRampRate(double);
 	void setSetpointRange(double);
 	void setOutputFilter(double);
-	double getOutput(double actual);
-	double getOutput(double actual, double setpoint);
+	double getOutput(const double actual);
+	double getOutput(const double actual, const double setpoint);
 
 	typedef struct
 	{
@@ -47,7 +44,7 @@ public:
 
 protected:
 	int clamp(double* v, double min, double max);
-	bool between(double v, double min ,double max);
+	bool isbetween(double v, double min ,double max);
 	void checkSigns();
 	void init();
 	double P;
