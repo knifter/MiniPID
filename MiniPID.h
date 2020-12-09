@@ -1,8 +1,17 @@
-#ifndef MINIPID_H
-#define MINIPID_H
+/*
+ * MiniPID.h
+ *
+ *  Created on: 5 apr. 2018
+ *      Author: Tijs
+ */
+
+#ifndef __MINIPID_H_
+#define __MINIPID_H_
+
 
 class MiniPID{
 public:
+	MiniPID();
 	MiniPID(double, double, double);
 	MiniPID(double, double, double, double);
 	void setP(double);
@@ -14,19 +23,31 @@ public:
 	void setMaxIOutput(double);
 	void setOutputLimits(double);
 	void setOutputLimits(double,double);
+	void getOutputLimits(double*, double*);
 	void setDirection(bool);
 	void setSetpoint(double);
+	double getSetpoint();
 	void reset();
 	void setOutputRampRate(double);
 	void setSetpointRange(double);
 	void setOutputFilter(double);
-	double getOutput();
-	double getOutput(double);
-	double getOutput(double, double);
+	double getOutput(double actual);
+	double getOutput(double actual, double setpoint);
 
-private:
-	double clamp(double, double, double);
-	bool bounded(double, double, double);
+	typedef struct
+	{
+		double Pterm;
+		double Iterm;
+		double Dterm;
+		double Fterm;
+		double input;
+		double error;
+		double output;
+	} StatusPoint;
+
+protected:
+	int clamp(double* v, double min, double max);
+	bool between(double v, double min ,double max);
 	void checkSigns();
 	void init();
 	double P;
@@ -35,15 +56,14 @@ private:
 	double F;
 
 	double maxIOutput;
-	double maxError;
 	double errorSum;
 
-	double maxOutput; 
+	double maxOutput;
 	double minOutput;
 
 	double setpoint;
 
-	double lastActual;
+	double lastError;
 
 	bool firstRun;
 	bool reversed;
@@ -54,5 +74,11 @@ private:
 	double outputFilter;
 
 	double setpointRange;
+
+	int outputClampedByRamprate = 0;
+	int outputClampedByMinMax = 0;
+
+	StatusPoint _last;
 };
-#endif
+
+#endif /* __MINIPID_H_ */

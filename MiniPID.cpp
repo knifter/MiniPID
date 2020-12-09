@@ -1,13 +1,23 @@
+/*
+ * MiniPID.cpp
+ *
+ *  Created on: 5 apr. 2018
+ *      Author: Tijs (not original author)
+ */
+
 /**
-* Small, easy to use PID implementation with advanced controller capability.<br> 
+* Small, easy to use PID implementation with advanced controller capability.<br>
 * Minimal usage:<br>
 * setPID(p,i,d); <br>
 * ...looping code...{ <br>
 * output=getOutput(sensorvalue,target); <br>
 * }
-* 
+*
 * @see http://brettbeauregard.com/blog/2011/04/improving-the-beginners-pid-direction/improving-the-beginners-pid-introduction
 */
+#include <stdio.h>
+#include <math.h>
+#include <sys/time.h>
 
 #include "MiniPID.h"
 
@@ -18,23 +28,28 @@ MiniPID::MiniPID(double p, double i, double d){
 	init();
 	P=p; I=i; D=d;
 }
+
+MiniPID::MiniPID(){
+	init();
+}
+
 MiniPID::MiniPID(double p, double i, double d, double f){
 	init();
 	P=p; I=i; D=d; F=f;
 }
+
 void MiniPID::init(){
-	P=0;
-	I=0;
-	D=0;
-	F=0;
+	P=0.0;
+	I=0.0;
+	D=0.0;
+	F=0.0;
 
 	maxIOutput=0;
-	maxError=0;
 	errorSum=0;
-	maxOutput=0; 
+	maxOutput=0;
 	minOutput=0;
 	setpoint=0;
-	lastActual=0;
+	lastError=0;
 	firstRun=true;
 	reversed=false;
 	outputRampRate=0;
@@ -63,30 +78,33 @@ void MiniPID::setP(double p){
 
 /**
  * Changes the I parameter <br>
- * this->is used for overcoming disturbances, and ensuring that the controller always gets to the control mode. 
+ * this->is used for overcoming disturbances, and ensuring that the controller always gets to the control mode.
  * Typically tuned second for "Position" based modes, and third for "Rate" or continuous based modes. <br>
  * Affects output through <b>output+=previous_errors*Igain ;previous_errors+=current_error</b>
- * 
+ *
  * @see {@link #setMaxIOutput(double) setMaxIOutput} for how to restrict
  *
  * @param i New gain value for the Integral term
  */
-void MiniPID::setI(double i){
-	if(I!=0){
-		errorSum=errorSum*I/i;
-		}
-	if(maxIOutput!=0){
-		maxError=maxIOutput/i;
-	}
+void MiniPID::setI(double i)
+{
+	 /* Implementation note:
+	 * this scales the accumulated error to avoid output errors.
+	 * As an example doubling the I term cuts the accumulated error in half, which results in the
+	 * output change due to the I term constant during the transition.
+	 * TvR: This is now implemented in the calculation loop
+	 */
+//	if(I!=0)
+//	{
+//		errorSum=errorSum*i/I;
+//	};
+//	if(maxIOutput!=0)
+//	{
+//		maxErrorSum = maxIOutput/i;
+//	}
 	I=i;
 	checkSigns();
-	 /* Implementation note: 
-	 * this->Scales the accumulated error to avoid output errors. 
-	 * As an example doubling the I term cuts the accumulated error in half, which results in the 
-	 * output change due to the I term constant during the transition. 
-	 *
-	 */
-} 
+}
 
 void MiniPID::setD(double d){
 	D=d;
@@ -94,29 +112,14 @@ void MiniPID::setD(double d){
 }
 
 /**Configure the FeedForward parameter. <br>
- * this->is excellent for Velocity, rate, and other	continuous control modes where you can 
+ * this->is excellent for Velocity, rate, and other	continuous control modes where you can
  * expect a rough output value based solely on the setpoint.<br>
  * Should not be used in "position" based control modes.
- * 
+ *
  * @param f Feed forward gain. Affects output according to <b>output+=F*Setpoint</b>;
  */
 void MiniPID::setF(double f){
 	F=f;
-	checkSigns();
-}
-
-/** Create a new PID object. 
- * @param p Proportional gain. Large if large difference between setpoint and target. 
- * @param i Integral gain.	Becomes large if setpoint cannot reach target quickly. 
- * @param d Derivative gain. Responds quickly to large changes in error. Small values prevents P and I terms from causing overshoot.
- */
-void MiniPID::setPID(double p, double i, double d){
-	P=p;I=i;D=d;
-	checkSigns();
-}
-
-void MiniPID::setPID(double p, double i, double d,double f){
-	P=p;I=i;D=d;F=f;
 	checkSigns();
 }
 
@@ -125,19 +128,16 @@ void MiniPID::setPID(double p, double i, double d,double f){
  * @param maximum. Units are the same as the expected output value
  */
 void MiniPID::setMaxIOutput(double maximum){
-	/* Internally maxError and Izone are similar, but scaled for different purposes. 
-	 * The maxError is generated for simplifying math, since calculations against 
-	 * the max error are far more common than changing the I term or Izone. 
+	/* Internally maxError and Izone are similar, but scaled for different purposes.
+	 * The maxError is generated for simplifying math, since calculations against
+	 * the max error are far more common than changing the I term or Izone.
 	 */
 	maxIOutput=maximum;
-	if(I!=0){
-		maxError=maxIOutput/I;
-	}
 }
 
-/**Specify a maximum output. If a single parameter is specified, the minimum is 
+/**Specify a maximum output. If a single parameter is specified, the minimum is
  * set to (-maximum).
- * @param output 
+ * @param output
  */
 void MiniPID::setOutputLimits(double output){ setOutputLimits(-output,output);}
 
@@ -171,122 +171,140 @@ void MiniPID::setDirection(bool reversed){
 /**Set the target for the PID calculations
  * @param setpoint
  */
-void MiniPID::setSetpoint(double setpoint){
+void MiniPID::setSetpoint(double setpoint)
+{
 	this->setpoint=setpoint;
-} 
+#ifdef MINIPID_SUPPRESS_DKICK
+	this->lastError += setpoint;
+#endif
+}
 
-/** Calculate the PID value needed to hit the target setpoint. 
-* Automatically re-calculates the output at each call. 
+double MiniPID::getSetpoint()
+{
+	return setpoint;
+}
+
+/** Calculate the PID value needed to hit the target setpoint.
+* Automatically re-calculates the output at each call.
 * @param actual The monitored value
 * @param target The target value
-* @return calculated output value for driving the actual to the target 
+* @return calculated output value for driving the actual to the target
 */
-double MiniPID::getOutput(double actual, double setpoint){
+double MiniPID::getOutput(double actual)
+{
 	double output;
-	double Poutput;
-	double Ioutput;
-	double Doutput;
-	double Foutput;
 
-	this->setpoint=setpoint;
+	double sp = setpoint;
 
+#ifdef MINIPID_RAMP_SETPOINT
 	//Ramp the setpoint used for calculations if user has opted to do so
-	if(setpointRange!=0){
-		setpoint=clamp(setpoint,actual-setpointRange,actual+setpointRange);
+	if(setpointRange!=0)
+	{
+		sp=clamp(setpoint,actual-setpointRange,actual+setpointRange);
 	}
+#endif
+
+#ifdef MINIPID_DT_CALC
+	static struct timeval last, now;
+	gettimeofday(&now, NULL);
+	if(firstRun)
+		last = now;
+	double dt = TIMEVAL_DIFF_SEC(now, last);
+	last = now;
+#else
+	double dt = 1.0;
+#endif
 
 	//Do the simple parts of the calculations
-	double error=setpoint-actual;
+	double error = sp-actual;
 
-	//Calculate F output. Notice, this->depends only on the setpoint, and not the error. 
-	Foutput=F*setpoint;
+	//Calculate F output. Notice, this depends only on the setpoint, and not the error.
+	double Foutput = F*sp;
 
 	//Calculate P term
-	Poutput=P*error;	 
+	double Poutput = P*error;
 
-	//If this->is our first time running this-> we don't actually _have_ a previous input or output. 
+	//If this->is our first time running this-> we don't actually have a previous input or output.
 	//For sensor, sanely assume it was exactly where it is now.
-	//For last output, we can assume it's the current time-independent outputs. 
-	if(firstRun){
-		lastActual=actual;
-		lastOutput=Poutput+Foutput;
-		firstRun=false;
-	}
-
+	//For last output, we can assume it's the current time-independent outputs.
+	if(firstRun)
+	{
+		lastError = error;
+		errorSum = 0;
+		lastOutput = SHUTDOWN_SETPOINT; //Poutput+Foutput;
+		firstRun = false;
+	};
 
 	//Calculate D Term
 	//Note, this->is negative. this->actually "slows" the system if it's doing
-	//the correct thing, and small values helps prevent output spikes and overshoot 
-
-	Doutput= -D*(actual-lastActual);
-	lastActual=actual;
-
-
+	//the correct thing, and small values helps prevent output spikes and overshoot
+	double Doutput= D*(error-lastError) / dt;
+	lastError=error;
 
 	//The Iterm is more complex. There's several things to factor in to make it easier to deal with.
-	// 1. maxIoutput restricts the amount of output contributed by the Iterm.
-	// 2. prevent windup by not increasing errorSum if we're already running against our max Ioutput
-	// 3. prevent windup by not increasing errorSum if output is output=maxOutput	
-	Ioutput=I*errorSum;
-	if(maxIOutput!=0){
-		Ioutput=clamp(Ioutput,-maxIOutput,maxIOutput); 
-	}	
+	// 1. The multiplication with I-gain is done when adding to the sum, this prevents the bump on I-gain changes
+	// 2. prevent windup by not increasing errorSum if output is output=maxOutput or output=minOutput
+	// 3. prevent windup by not increasing errorSum if we're already running against our max Ioutput
+	// 3b. But only if the outputclamp and error have the same sign (direction)
+	bool freeze_integral = outputClampedByRamprate || (outputClampedByMinMax && outputClampedByMinMax*error > 0);
+
+	// If all good, increase integral
+	if(!freeze_integral)
+		errorSum+=I*error*dt;
+
+	// 3. maxIoutput restricts the amount of output contributed by the Iterm.
+	if(maxIOutput != 0)
+		clamp(&errorSum, -maxIOutput, maxIOutput);
+
+	// Now our I output term is just the sum as the I factor is already processed while adding to the sum previously
+	double Ioutput = errorSum;
 
 	//And, finally, we can just add the terms up
-	output=Foutput + Poutput + Ioutput + Doutput;
+	output = Foutput + Poutput + Ioutput + Doutput;
 
-	//Figure out what we're doing with the error.
-	if(minOutput!=maxOutput && !bounded(output, minOutput,maxOutput) ){
-		errorSum=error; 
-		// reset the error sum to a sane level
-		// Setting to current error ensures a smooth transition when the P term 
-		// decreases enough for the I term to start acting upon the controller
-		// From that point the I term will build up as would be expected
-	}
-	else if(outputRampRate!=0 && !bounded(output, lastOutput-outputRampRate,lastOutput+outputRampRate) ){
-		errorSum=error; 
-	}
-	else if(maxIOutput!=0){
-		errorSum=clamp(errorSum+error,-maxError,maxError);
-		// In addition to output limiting directly, we also want to prevent I term 
-		// buildup, so restrict the error directly
-	}
-	else{
-		errorSum+=error;
+	// Limit the output by ramprate
+	outputClampedByRamprate = false;
+	if(outputRampRate !=0 )
+	{
+		outputClampedByRamprate = clamp(&output, lastOutput-outputRampRate, lastOutput+outputRampRate);
 	}
 
-	//Restrict output to our specified output and ramp limits
-	if(outputRampRate!=0){
-		output=clamp(output, lastOutput-outputRampRate,lastOutput+outputRampRate);
+	// Limit the output by min/maxOutput
+	outputClampedByMinMax = false;
+	if(minOutput != maxOutput)
+	{
+		outputClampedByMinMax = clamp(&output, minOutput, maxOutput);
 	}
-	if(minOutput!=maxOutput){ 
-		output=clamp(output, minOutput,maxOutput);
-		}
-	if(outputFilter!=0){
+
+	// Filter the Output
+	if(outputFilter!=0)
+	{
 		output=lastOutput*outputFilter+output*(1-outputFilter);
 	}
 
-	lastOutput=output;
+	// Gather statusdata
+	_last.input = actual;
+	_last.Fterm = Foutput;
+	_last.Pterm = Poutput;
+	_last.Iterm = Ioutput;
+	_last.Dterm = Doutput;
+	_last.output = output;
+	_last.error = error;
+
+	lastOutput = output;
 	return output;
 }
 
 /**
  * Calculates the PID value using the last provided setpoint and actual valuess
- * @return calculated output value for driving the actual to the target 
+ * @return calculated output value for driving the actual to the target
  */
-double MiniPID::getOutput(){
-	return getOutput(lastActual,setpoint);
+double MiniPID::getOutput(double actual, double setpoint)
+{
+	setSetpoint(setpoint);
+	return getOutput(actual);
 }
 
-/**
- * 
- * @param actual
- * @return calculated output value for driving the actual to the target 
- */
-double MiniPID::getOutput(double actual){
-	return getOutput(actual,setpoint);
-}
-	
 /**
  * Resets the controller. this->erases the I term buildup, and removes D gain on the next loop.
  */
@@ -295,7 +313,7 @@ void MiniPID::reset(){
 	errorSum=0;
 }
 
-/**Set the maximum rate the output can increase per cycle. 
+/**Set the maximum rate the output can increase per cycle.
  * @param rate
  */
 void MiniPID::setOutputRampRate(double rate){
@@ -303,7 +321,7 @@ void MiniPID::setOutputRampRate(double rate){
 }
 
 /** Set a limit on how far the setpoint can be from the current position
- * <br>Can simplify tuning by helping tuning over a small range applies to a much larger range. 
+ * <br>Can simplify tuning by helping tuning over a small range applies to a much larger range.
  * <br>this->limits the reactivity of P term, and restricts impact of large D term
  * during large setpoint adjustments. Increases lag and I term if range is too small.
  * @param range
@@ -318,10 +336,11 @@ void MiniPID::setSetpointRange(double range){
  * <pre>output*(1-strength)*sum(0..n){output*strength^n}</pre>
  * @param output valid between [0..1), meaning [current output only.. historical output only)
  */
-void MiniPID::setOutputFilter(double strength){
-	if(strength==0 || bounded(strength,0,1)){
-		outputFilter=strength;
-	}
+void MiniPID::setOutputFilter(double strength)
+{
+	if(strength < 0 || strength >= 1)
+		return;
+	outputFilter=strength;
 }
 
 //**************************************
@@ -333,12 +352,21 @@ void MiniPID::setOutputFilter(double strength){
  * @param value input value
  * @param min maximum returned value
  * @param max minimum value in range
- * @return Value if it's within provided range, min or max otherwise 
+ * @return Value if it's within provided range, min or max otherwise
  */
-double MiniPID::clamp(double value, double min, double max){
-	if(value > max){ return max;}
-	if(value < min){ return min;}
-	return value;
+int MiniPID::clamp(double* value, double min, double max)
+{
+	if(*value > max)
+	{
+		*value = max;
+		return 1;
+	}
+	if(*value < min)
+	{
+		*value = min;
+		return -1;
+	}
+	return 0;
 }
 
 /**
@@ -348,7 +376,7 @@ double MiniPID::clamp(double value, double min, double max){
  * @param max Maximum value of range
  * @return
  */
-bool MiniPID::bounded(double value, double min, double max){
+bool MiniPID::between(double value, double min, double max){
 		return (min<value) && (value<max);
 }
 
@@ -370,3 +398,4 @@ void MiniPID::checkSigns(){
 		if(F<0) F*=-1;
 	}
 }
+
