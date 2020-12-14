@@ -1,5 +1,7 @@
 # miniPID
-This is my fork of MiniPID by tekdemo and the Ardiuno-PID-library from br3tbb (https://github.com/br3ttb/Arduino-PID-Library)
+This is my fork/merge of 
+ - MiniPID by tekdemo (https://github.com/tekdemo/MiniPID) and 
+  - the Ardiuno-PID-library from br3tbb (https://github.com/br3ttb/Arduino-PID-Library)
 
 While I like the MiniPID interface and its ramping capabilities it lacks the improvements made by br3tbb (http://brettbeauregard.com/) in his blog. By combining the two I hope to achieve best of both worlds. 
 
