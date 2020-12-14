@@ -1,7 +1,18 @@
 # miniPID
+This is my fork of MiniPID by tekdemo and the Ardiuno-PID-library from br3tbb (https://github.com/br3ttb/Arduino-PID-Library)
+
+While I like the MiniPID interface and its ramping capabilities it lacks the improvements made by br3tbb (http://brettbeauregard.com/) in his blog. By combining the two I hope to achieve best of both worlds. 
+
+Original MiniPID description:
 This is a small, fully self contained PID class designed to help provide simple, efficient tuning, and simple integration wherever any level of PID control might be needed. 
 
 All code is contained in a single C++ class, and doesn't depend on any specific compiler or toolchain. However, example Arduino sketches are included.
+
+## Expected improvements by knifter
+- Derivative on Measurement (Derivate on setpoint is actually a Forward term in my opinion and can be implemented as such)
+- Proportional on Measurement together with Propoertional on Error
+- Forward term learning: By storing the output for a certain setpoints an estimate (interpolation) can be made for a forward term.
+- Inheritable class to allow for Forward term implementation for more advanced forwrd terms/system models
 
 ## Design Goals
 - Provide all expected features of a quality PID loop. 
