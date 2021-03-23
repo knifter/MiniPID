@@ -28,6 +28,7 @@ public:
 	void setOutputRampRate(double);
 	void setSetpointRange(double);
 	void setOutputFilter(double);
+	void setOutput(double);
 	double getOutput(const double actual);
 	double getOutput(const double actual, const double setpoint);
 
@@ -47,33 +48,34 @@ protected:
 	bool isbetween(double v, double min ,double max);
 	void checkSigns();
 	void init();
-	double P;
-	double I;
-	double D;
-	double F;
 
-	double maxIOutput;
-	double errorSum;
+	double _kP;
+	double _kI;
+	double _kD;
+	double _kF;
 
-	double maxOutput;
-	double minOutput;
+	double _maxIOutput;
+	double _errorSum;
 
-	double setpoint;
+	double _maxOutput;
+	double _minOutput;
 
-	double lastError;
+	double _setpoint;
 
-	bool firstRun;
-	bool reversed;
+	double _lastError;
 
-	double outputRampRate;
-	double lastOutput;
+	bool _firstRun;
+	bool _reversed;
 
-	double outputFilter;
+	double _outputRampRate;
+	double _lastOutput;
 
-	double setpointRange;
+	double _outputFilter;
 
-	int outputClampedByRamprate = 0;
-	int outputClampedByMinMax = 0;
+	double _setpointRange;
+
+	int _outputClampedByRamprate = 0;
+	int _outputClampedByMinMax = 0;
 
 	StatusPoint _last;
 };
