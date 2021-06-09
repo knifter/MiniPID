@@ -219,7 +219,6 @@ double MiniPID::getOutput(const double actual)
 	if(_firstRun)
 	{
 		_lastError = error;
-		_errorSum = 0;
 		_lastOutput = Poutput + Foutput;
 		_firstRun = false;
 	};
